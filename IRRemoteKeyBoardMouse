@@ -1,0 +1,166 @@
+#include <IRremote.h>
+#include <Keyboard.h>
+#include <Mouse.h>
+
+// Pin used to receive IR signal from sensor
+IRrecv irrecv(2);
+decode_results Results;
+
+// How far to move mouse from current position
+const int Range = 10;
+
+// Total number of buttons used
+const int ButtonCount = 32;
+
+// To handel all buttons
+int AllButtons[ButtonCount];
+
+// To save the state of buttons in case we need to repeat
+int RepeatCode[ButtonCount];
+
+// Resulting codes from pressing buttons on the remote
+const int ResultsValues[ButtonCount] = {1086198509, 1086231149, 1086239309, 1086222989, 1086220439,
+                                        1086238799, 1086202589, 1086255629, 1086214829, 1086200039,
+                                        1086249509, 1086216359, 1086220949, 1086253589, 1086255119,
+                                        1086216869, 1086193919, 1086226559, 1086210239, 1086242879,
+                                        1086202079, 1086234719, 1086218399, 1086251039, 1086197999,
+                                        1086230639, 1086227069, 1086210749, 1086204629, 1086196469,
+                                        1086237269, 1086233189
+                                       };
+
+int ButtonNumber(int value)
+{
+  // Find which button has been pressed and return it's index
+  for (int i = 0; i < ButtonCount; i++) if (ResultsValues[i] == value) return i;
+
+  // Button code not saved in ResultsValues array
+  return -1;
+}
+
+void PressRelease(char x) {
+  Keyboard.press(x);
+  delay(100);
+  Keyboard.releaseAll();
+}
+
+void setup() {
+  // Start receiving button presses
+  irrecv.enableIRIn();
+
+  // Initialize
+  Keyboard.begin();
+  Mouse.begin();
+  
+  // Use to get value for new buttons and debug
+  Serial.begin(115200);
+}
+
+void loop() {
+  // Button pressed?
+  if (irrecv.decode(&Results)) {
+    
+    // Use to get value for new buttons and debug
+    Serial.println(Results.value);
+    
+    // Use previously stored button values if it is a repeat code
+    if (Results.value == 4294967295) for (int i = 0; i < ButtonCount; i++) AllButtons[i] = RepeatCode[i];
+    
+    else {
+      // Set all buttons to 1
+      for (int i = 0; i < ButtonCount; i++) AllButtons[i] = 1;
+      
+      // Set only the button that has been pressed to 0
+      AllButtons[ButtonNumber(Results.value)] = 0;
+      
+      // Save the state of buttons in case we need to repeat
+      for (int i = 0; i < ButtonCount; i++) RepeatCode[i] = AllButtons[i];
+    }
+
+    // Receive next button press
+    irrecv.resume();
+    
+    // Repeatable buttons
+    // Vertical or horizontal mouse movement
+    if (AllButtons[0] ^ AllButtons[1] ^ AllButtons[2] ^ AllButtons[3]) Mouse.move((AllButtons[3] - AllButtons[1]) * Range, (AllButtons[0] - AllButtons[2]) * Range, 0);
+    
+    // Up Right
+    else if (AllButtons[4] == 0) Mouse.move(Range, -1 * Range, 0);
+    
+    // Down Right
+    else if (AllButtons[5] == 0) Mouse.move(Range, Range, 0);
+    
+    // Down Left
+    else if (AllButtons[6] == 0) Mouse.move(-1 * Range, Range, 0);
+    
+    // Up Left
+    else if (AllButtons[7] == 0) Mouse.move(-1 * Range, -1 * Range, 0);
+    
+    // Non-repeatable buttons
+    // Mouse click
+    else if (AllButtons[8] == 0) Mouse.click(MOUSE_LEFT);
+    
+    // Launch Web Browser
+    else if (AllButtons[9] == 0) {
+      PressRelease(KEY_LEFT_GUI);
+      PressRelease(KEY_DOWN_ARROW);
+      PressRelease(KEY_RIGHT_ARROW);
+      PressRelease(KEY_RETURN);
+    }
+    
+    // Pause/Play
+    else if (AllButtons[10] == 0) Keyboard.press('K');
+    
+    // Full Screen Enter/Exit
+    else if (AllButtons[11] == 0) Keyboard.press('F');
+    
+    // Forward 10 seconds
+    else if (AllButtons[12] == 0) Keyboard.press('L');
+    
+    // Back 10 seconds
+    else if (AllButtons[13] == 0) Keyboard.press('J');
+    
+    // Scrolling
+    else if (AllButtons[14] == 0) Keyboard.press(KEY_PAGE_UP);
+    else if (AllButtons[15] == 0) Keyboard.press(KEY_PAGE_DOWN);
+    
+    // Refresh
+    else if (AllButtons[26] == 0) Keyboard.press(KEY_F5);
+    
+    // Next video
+    else if (AllButtons[27] == 0) {
+      Keyboard.press(KEY_LEFT_SHIFT);
+      Keyboard.press('n');
+    }
+    
+    // Close window
+    else if (AllButtons[28] == 0) {
+      Keyboard.press(KEY_LEFT_ALT);
+      Keyboard.press(KEY_F4);
+    }
+    
+    // Just Esc
+    else if (AllButtons[29] == 0) Keyboard.press(KEY_ESC);
+    
+    // Browser back
+    else if (AllButtons[30] == 0) {
+      Keyboard.press(KEY_LEFT_ALT);
+      Keyboard.press(KEY_LEFT_ARROW);
+    }
+    
+    // Minimize/Maximize
+    else if (AllButtons[31] == 0) {
+      Keyboard.press(KEY_LEFT_CTRL);
+      Keyboard.press(KEY_LEFT_ALT);
+      Keyboard.press('d');
+    }
+    
+    // Jump to 0%, 10%, 20% ... 90% of video
+    else for (int i = 0; i <= 9; i++) if (AllButtons[i + 16] == 0) Keyboard.print(i);
+    
+    // Don't repeat Non-repeatable buttons
+    for (int i = 8; i < ButtonCount; i++) RepeatCode[i] = 1;
+    
+    // Cleanup
+    Keyboard.releaseAll();
+  }
+}
